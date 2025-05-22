@@ -133,14 +133,14 @@ def conv_im2col(input, kernel):
                 col_idx = idx*H_out*W_out + h*W_out + w
                 
                 # Flatten patch and store as column
-                cols[:, col_idx] = patch.ravel()
+                cols[:, col_idx] = patch.flatten()
 
     # --------------------------------------------------
     # Step 2: Kernel reshaping
     # --------------------------------------------------
-    # Reshape kernel to (C_out, C_in*K_h*K_w)
+    # Reshape kernel to (C_out, C_in*K_h*K_w) into 2D matrix
     # This allows matrix multiplication with columns matrix
-    kernel_reshaped = kernel.reshape(C_out, -1)
+    kernel_reshaped = kernel.reshape(C_out, C_in*K_h*K_w)
     
     print(f"\n[Kernel] Reshaped kernel: {kernel_reshaped.shape}")
     print(f"Reshaped kernel size: {kernel_reshaped.nbytes/1024:.2f} KB")
@@ -209,7 +209,7 @@ def main(filter_type, compute_type):
     t_st = time.time()
     if compute_type == ComputeType.NAIVE_CONV:
         output = conv_nchw_4d(input_nchw, kernel)
-    elif compute_type == ComputeType.NAIVE_MATMUL:
+    elif compute_type == ComputeType.MATMUL:
         output = conv_im2col(input_nchw, kernel)
     else:
         print("Error: incorrect compute type")
@@ -231,5 +231,6 @@ def main(filter_type, compute_type):
 
     print("Results saved")
 
+
 remove_png_files()
-main(FilterType.BLUR, ComputeType.NAIVE_CONV)
+main(FilterType.BLUR, ComputeType.MATMUL)
