@@ -25,18 +25,18 @@ def load_kernel(type = "edge"):
         exit(1)
     print(kernel.shape)
     print(kernel)
-    return kernel   
+    return kernel
 
-def conv_nchw_4d(input, kernel, N, C_in, H, W, C_out, K_h, K_w):
+
+def conv_nchw_4d(input, kernel):
+    N, C_in, H, W = input.shape
+    C_out, C_in, K_h, K_w = kernel.shape
     """
     Python implementation of 4D convolution matching the C version
     """
     H_out = H - K_h + 1
     W_out = W - K_w + 1
     output = np.zeros((N, C_out, H_out, W_out), dtype=np.float32)
-    print("expected input sizes: ", N, C_in, H, W)
-    print("real input sizes: ", input.shape)
-    print("kernel sizes: ", kernel.shape)
     for n in range(N):
         for co in range(C_out):
             for i in range(H_out):
@@ -49,24 +49,27 @@ def conv_nchw_4d(input, kernel, N, C_in, H, W, C_out, K_h, K_w):
                     output[n, co, i, j] = sum_val
     return output
 
-def load_image(image, size=(64, 64)): 
-    """Load and resize image to target size"""
-    img = resize(image, size, anti_aliasing=True)
-    return img.astype(np.float32)
+def preprocess_image(image): 
+    """Load and resize image with 3 channels (convert grayscale to RGB)"""
+    # Convert grayscale to RGB if needed
+    if len(image.shape) == 2:
+        image = np.stack([image]*3, axis=-1)
+    
+    return image.transpose(2, 0, 1).astype(np.float32)  # CHW format
 
 
-def main():
+def main(mode = "edge"):
     # Test image loading first
     try:
         print("Loading images...")
-        image1 = rgb2gray(data.astronaut())
-        image2 = data.camera()
+        image1 = data.astronaut()
+        print("!!!!!!!!!! ", image1.shape)
+        #image2 = data.camera()
+        image2 = image1
         print("Images loaded successfully")
         
-        # Resize everything into first image size so they can form batch
-        img_size = image1.shape
-        image1 = load_image(image1, img_size)
-        image2 = load_image(image2, img_size)
+        image1 = preprocess_image(image1)
+        image2 = preprocess_image(image2)
         print(f"Image shapes after resize: {image1.shape}, {image2.shape}")
         
     except Exception as e:
@@ -75,26 +78,20 @@ def main():
 
     # Create input tensor
     try:
-        input_nchw = np.stack([image1, image2])[:, np.newaxis, :, :]
+        input_nchw = np.stack([image1, image2])[:, :, :]
         print(f"Input tensor shape: {input_nchw.shape}")
     except Exception as e:
         print(f"Error creating input tensor: {str(e)}")
         exit(1)
 
     # Define kernel
-    kernel = load_kernel("blur")
+    kernel = load_kernel(mode)
 
     # Run convolution
-    try:
-        print("Running convolution...")
-        output = conv_nchw_4d(input_nchw, kernel,
-                            N=2, C_in=1, H=img_size[0], W=img_size[1],
-                            C_out=1, K_h=3, K_w=3)
-        print("Convolution completed successfully")
-        print(f"Output shape: {output.shape}")
-    except Exception as e:
-        print(f"Error in convolution: {str(e)}")
-        exit(1)
+    print("Running convolution...")
+    output = conv_nchw_4d(input_nchw, kernel)
+    print("Convolution completed successfully")
+    print(f"Output shape: {output.shape}")
 
     # Save results to files instead of showing interactively
     def save_image(img, filename):
@@ -103,10 +100,9 @@ def main():
 
     save_image(input_nchw[0, 0], 'original1.png')
     save_image(input_nchw[1, 0], 'original2.png')
-    save_image(output[0, 0], 'edges1.png')
-    save_image(output[1, 0], 'edges2.png')
+    save_image(output[0, 0], mode + '1.png')
+    save_image(output[1, 0], mode + '2.png')
 
-    print("Results saved to:")
-    print("- original1.png\n- original2.png\n- edges1.png\n- edges2.png")
+    print("Results saved")
 
 main()
