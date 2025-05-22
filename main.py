@@ -58,19 +58,16 @@ def preprocess_image(image):
     return image.transpose(2, 0, 1).astype(np.float32)  # CHW format
 
 
-def main(mode = "edge"):
+def main(mode = "blur"):
     # Test image loading first
     try:
         print("Loading images...")
-        image1 = data.astronaut()
-        print("!!!!!!!!!! ", image1.shape)
-        #image2 = data.camera()
-        image2 = image1
+        images = [data.astronaut(), data.astronaut()]
         print("Images loaded successfully")
         
-        image1 = preprocess_image(image1)
-        image2 = preprocess_image(image2)
-        print(f"Image shapes after resize: {image1.shape}, {image2.shape}")
+        for i in range(len(images)):
+            images[i] = preprocess_image(images[i])
+        print(f"Image shapes after resize: {images[0].shape}")
         
     except Exception as e:
         print(f"Error in image loading: {str(e)}")
@@ -78,7 +75,7 @@ def main(mode = "edge"):
 
     # Create input tensor
     try:
-        input_nchw = np.stack([image1, image2])[:, :, :]
+        input_nchw = np.stack(images)[:, :, :]
         print(f"Input tensor shape: {input_nchw.shape}")
     except Exception as e:
         print(f"Error creating input tensor: {str(e)}")
@@ -93,15 +90,15 @@ def main(mode = "edge"):
     print("Convolution completed successfully")
     print(f"Output shape: {output.shape}")
 
-    # Save results to files instead of showing interactively
     def save_image(img, filename):
         img = (img - img.min()) / (img.max() - img.min())
         plt.imsave(filename, img, cmap='gray')
 
-    save_image(input_nchw[0, 0], 'original1.png')
-    save_image(input_nchw[1, 0], 'original2.png')
-    save_image(output[0, 0], mode + '1.png')
-    save_image(output[1, 0], mode + '2.png')
+    for i in range(0, len(images)):
+        save_image(input_nchw[0, 0], 'original_' + str(i) + '.png')
+    
+    for i in range(0, len(images)):
+        save_image(output[i, 0], mode + str(i) + '.png')
 
     print("Results saved")
 
