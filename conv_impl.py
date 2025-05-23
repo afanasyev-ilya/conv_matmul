@@ -1,6 +1,30 @@
 import numpy as np
 
 
+# 3. Matrix multiplication via 1x1 convolution
+def conv_1x1(input, kernel):
+    """Optimized 1x1 convolution implementation
+    Args:
+        input: (N, C_in, H, W)
+        kernel: (C_out, C_in, 1, 1)
+    """
+    # a: (N, C_in, H, W), (1, M, N, 1)
+    # b: (C_out, C_in, 1, 1), (N, K, 1, 1)
+    # H_out = H = N
+    # W_out = W = 1
+    N, C_in, H, W = input.shape
+    C_out, C_in, K_h, K_w = kernel.shape
+    output = np.zeros((N, C_out, H, W))
+    
+    # Simplified loops - no kernel spatial dimensions (1x1)
+    for h in range(H):
+        for co in range(C_out):
+            for ci in range(C_in):
+                #print(f"[{h} {co}] += [{h} {ci}] * [{co} {ci}]")
+                output[0, co, h, 0] += input[0, ci, h, 0] * kernel[co, ci, 0, 0]
+    return output
+    
+
 def conv_nchw_4d(input, kernel):
     N, C_in, H, W = input.shape
     C_out, C_in, K_h, K_w = kernel.shape

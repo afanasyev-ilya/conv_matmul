@@ -1,6 +1,6 @@
 import numpy as np
 import timeit
-from conv_impl import conv_nchw_4d
+from conv_impl import conv_nchw_4d, conv_1x1
 
 def matmul_via_conv(M, N, K):
     A = np.random.randn(M, N).astype(np.float32)
@@ -22,24 +22,6 @@ def matmul_via_conv(M, N, K):
     C_conv = conv_nchw_4d(A_4d, B_4d)
     conv_time = timeit.default_timer() - start
     C_conv = C_conv[0,:,:,0].T  # Convert back to 2D matrix
-    
-    # 3. Matrix multiplication via 1x1 convolution
-    def conv_1x1(input, kernel):
-        """Optimized 1x1 convolution implementation
-        Args:
-            input: (N, C_in, H, W)
-            kernel: (C_out, C_in, 1, 1)
-        """
-        N, C_in, H, W = input.shape
-        C_out = kernel.shape[0]
-        output = np.zeros((N, C_out, H, W))
-        
-        # Simplified loops - no kernel spatial dimensions (1x1)
-        for n in range(N):
-            for co in range(C_out):
-                for ci in range(C_in):
-                    output[n, co] += input[n, ci] * kernel[co, ci, 0, 0]
-        return output
     
     start = timeit.default_timer()
     C_optimized = conv_1x1(A_4d, B_4d)
