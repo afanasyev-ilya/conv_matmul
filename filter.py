@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import time
 import os
 from enum import Enum
-from conv_impl import conv_nchw_4d, conv_im2col
+from conv_impl import conv_nchw_4d, conv_im2col, winograd_conv3x3
+import argparse
 
 
 class FilterType(Enum):
@@ -16,8 +17,9 @@ class FilterType(Enum):
     BLUR = 2
 
 class ComputeType(Enum):
-    NAIVE_CONV = 1
+    DIRECT_CONV = 1
     MATMUL = 2
+    WINOGRAD_CONV = 3
 
 
 def remove_png_files():
@@ -82,7 +84,7 @@ def preprocess_image(image, filter):
     
 
 
-def main(filter_type, compute_type):
+def filter(filter_type, compute_type):
     os.makedirs("./images", exist_ok=True)
 
     # load images
@@ -104,10 +106,12 @@ def main(filter_type, compute_type):
     # Run convolution
     print("Running convolution...")
     t_st = time.time()
-    if compute_type == ComputeType.NAIVE_CONV:
+    if compute_type == ComputeType.DIRECT_CONV:
         output = conv_nchw_4d(input_nchw, kernel)
     elif compute_type == ComputeType.MATMUL:
         output = conv_im2col(input_nchw, kernel)
+    elif compute_type == ComputeType.WINOGRAD_CONV:
+        output = winograd_conv3x3(input_nchw, kernel)
     else:
         print("Error: incorrect compute type")
         exit(1)
@@ -129,5 +133,21 @@ def main(filter_type, compute_type):
     print("Results saved")
 
 
-remove_png_files()
-main(FilterType.BLUR, ComputeType.MATMUL)
+# ================= Command-line Handling ======================
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Image Convolution Methods')
+    parser.add_argument('--filter', type=str, required=True, 
+                        choices=['EDGES', 'BLUR'],
+                        help='Filter type: EDGES or BLUR')
+    parser.add_argument('--compute', type=str, required=True,
+                        choices=['DIRECT_CONV', 'MATMUL', 'WINOGRAD_CONV'],
+                        help='Compute method: DIRECT_CONV, MATMUL, or WINOGRAD_CONV')
+    
+    args = parser.parse_args()
+    
+    # Convert strings to Enum values
+    filter_type = FilterType[args.filter]
+    compute_type = ComputeType[args.compute]
+    
+    remove_png_files()
+    filter(filter_type, compute_type)

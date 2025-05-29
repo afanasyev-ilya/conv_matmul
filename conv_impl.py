@@ -133,3 +133,79 @@ def conv_im2col(input, kernel):
     print("=======================")
     
     return output
+
+
+# Transformation matrices for Winograd F(2x2, 3x3)
+B = np.array([
+    [1, 0, -1, 0],
+    [0, 1, 1, 0],
+    [0, -1, 1, 0],
+    [0, 1, 0, -1]
+], dtype=np.float32)
+
+G = np.array([
+    [1, 0, 0],
+    [0.5, 0.5, 0.5],
+    [0.5, -0.5, 0.5],
+    [0, 0, 1]
+], dtype=np.float32)
+
+A = np.array([
+    [1, 0],
+    [1, 1],
+    [1, -1],
+    [0, -1]
+], dtype=np.float32)
+
+def winograd_conv3x3(input, kernel):
+    """Winograd convolution for 3x3 kernels"""
+    N, C_in, H, W = input.shape
+    C_out, _, K_h, K_w = kernel.shape
+    assert K_h == 3 and K_w == 3, "Winograd requires 3x3 kernel"
+    
+    # Calculate output dimensions and padding
+    H_out = H - 2
+    W_out = W - 2
+    H_tiles = (H_out + 1) // 2
+    W_tiles = (W_out + 1) // 2
+    pad_h = H_tiles * 2 + 2 - H
+    pad_w = W_tiles * 2 + 2 - W
+    
+    # Apply symmetric padding
+    padded = np.pad(input, ((0,0), (0,0), (0, pad_h), (0, pad_w)), 
+                   mode='constant')
+    
+    # Transform kernel: V = G * kernel * G^T
+    V = np.zeros((C_out, C_in, 4, 4), dtype=np.float32)
+    for co in range(C_out):
+        for ci in range(C_in):
+            V[co, ci] = G @ kernel[co, ci] @ G.T
+    
+    output = np.zeros((N, C_out, H_tiles*2, W_tiles*2), dtype=np.float32)
+    
+    # Process each tile
+    for n in range(N):
+        for ti in range(H_tiles):
+            for tj in range(W_tiles):
+                # Temporary output buffer per tile
+                M = np.zeros((C_out, 4, 4), dtype=np.float32)
+                
+                # Process each input channel
+                for ci in range(C_in):
+                    # Extract 4x4 tile
+                    tile = padded[n, ci, ti*2:ti*2+4, tj*2:tj*2+4]
+                    
+                    # Transform input: U = B^T * tile * B
+                    U = B.T @ tile @ B
+                    
+                    # Element-wise multiplication
+                    for co in range(C_out):
+                        M[co] += U * V[co, ci]
+                
+                # Inverse transform and store
+                for co in range(C_out):
+                    Y = A.T @ M[co] @ A
+                    output[n, co, ti*2:ti*2+2, tj*2:tj*2+2] = Y
+    
+    # Crop to original output dimensions
+    return output[:, :, :H_out, :W_out]
