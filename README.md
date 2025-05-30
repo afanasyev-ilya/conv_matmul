@@ -22,6 +22,15 @@ and fo matmul f x g (g will be column), which will produce exactly the same resu
 
 NCHW example (instead of 1d): ![Diagram of …](https://miro.medium.com/v2/resize:fit:1400/format:webp/0*PLxQxGGuw0TSfFgE.png)
 
+Winograd convolution ideas:
+
+we also use matmul, but save operations for a fixed kernel size. E.g. instead of dowing dot product, we do this:
+
+![Diagram of …](https://miro.medium.com/v2/resize:fit:1082/format:webp/1*Mt1Nqb-dgZ8hsvwqFGc8Xw.png)
+
+and result = [m1 + m2 + m3], [m2 - m3 - m4].
+
+since some of coefficients in m2 and m3 depend only on filter values, we do less multiplications and additions.
 
 **2. 1x1 conv and matmul -> conv conversion**
 
