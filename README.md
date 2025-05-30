@@ -1,4 +1,4 @@
-1. use 
+**1. im2col and conv -> matmul conversion**
 
 ```
 python3 ./filter.py --filter EDGES --compute DIRECT_CONV
@@ -23,7 +23,7 @@ and fo matmul f x g (g will be column), which will produce exactly the same resu
 NCHW example (instead of 1d): ![Diagram of …](https://miro.medium.com/v2/resize:fit:1400/format:webp/0*PLxQxGGuw0TSfFgE.png)
 
 
-2. use 
+**2. 1x1 conv and matmul -> conv conversion**
 
 ```
 python3 ./matrix.py
