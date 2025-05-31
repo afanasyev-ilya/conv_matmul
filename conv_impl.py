@@ -134,11 +134,10 @@ def conv_im2col(input, kernel):
     
     return output
 
-
-# Winograd F(2x2, 3x3) transform matrices
 def winograd_conv3x3(input, kernel):
     """Winograd convolution for 3x3 kernels, output tile size 2x2"""
-    # Transformation matrices
+
+    # 1) Transformation matrices
     B = np.array([
         [1,  0, -1,  0],
         [0,  1,  1,  0],
@@ -160,19 +159,23 @@ def winograd_conv3x3(input, kernel):
         [0, -1]
     ], dtype=np.float32)
 
+    # 2) Read input dimensions
     N, C_in, H, W = input.shape
     C_out, _, K_h, K_w = kernel.shape
     assert K_h == 3 and K_w == 3, "Winograd requires 3x3 kernel"
 
-    # Output size and tile count
+    # 3) Compute output spatial size
     H_out = H - K_h + 1
     W_out = W - K_w + 1
+
+    # We want to tile the output 2×2 at a time
     tile_h = 2
     tile_w = 2
-    H_tiles = (H_out + tile_h - 1) // tile_h
-    W_tiles = (W_out + tile_w - 1) // tile_w
+    H_tiles = (H_out + tile_h - 1) // tile_h    # number of 2×2 vertical tiles
+    W_tiles = (W_out + tile_w - 1) // tile_w    # number of 2×2 horizontal tiles
 
-    # Padding to fit tiles
+    # 4) Pad the input so that H_tiles*2 + (3−1) = H_padded can be extracted in 4×4 blocks
+    #    i.e. we need: H_tiles*2 + 2 ≥ H ⇒ pad_h = H_tiles*2 + 2 − H; similarly for width.
     pad_h = H_tiles * tile_h + K_h - 1 - H
     pad_w = W_tiles * tile_w + K_w - 1 - W
     padded = np.pad(
@@ -181,35 +184,48 @@ def winograd_conv3x3(input, kernel):
         mode='constant', constant_values=0
     )
 
-    # Transform kernel once: V[co,ci] shape 4x4
+    # 5) Pre‐transform all 3×3 kernels ⟶ “Winograd‐domain”
+    #    V[co, ci] will be a 4×4 matrix for output‐channel co, input‐channel ci.
     V = np.zeros((C_out, C_in, 4, 4), dtype=np.float32)
     for co in range(C_out):
         for ci in range(C_in):
-            g = kernel[co, ci]
-            V[co, ci] = G @ g @ G.T
+            g = kernel[co, ci]          # shape (3,3)
+            V[co, ci] = G @ g @ G.T     # shape (4,4)
 
-    # Allocate output tiles
+    # 6) Allocate output container (in tiled form)
     out_tiles = np.zeros((N, C_out, H_tiles*tile_h, W_tiles*tile_w), dtype=np.float32)
 
-    # For each sample and tile
+    # 7) Loop over every sample n, every tile (th, tw), and do the transforms + multiplies
     for n in range(N):
         for th in range(H_tiles):
             for tw in range(W_tiles):
-                # M accumulates over input channels
+                # M will accumulate partial results (across input channels) in Winograd‐domain,
+                # for each output channel. Shape: (C_out, 4, 4).
                 M = np.zeros((C_out, 4, 4), dtype=np.float32)
-                # For each input channel
+
+                # 7a) For each input channel, transform the 4×4 patch of data:
                 for ci in range(C_in):
-                    # Extract input patch (4x4)
-                    d = padded[n, ci, th*tile_h:th*tile_h+4, tw*tile_w:tw*tile_w+4]
-                    # Input transform: U = B * d * B^T
+                    # Extract a 4×4 patch from padded input:
+                    d = padded[n, ci, th*tile_h : th*tile_h+4,
+                                      tw*tile_w : tw*tile_w+4]
+                    # Transform input patch: U = B @ d @ B^T  (4×4)
                     U = B @ d @ B.T
-                    # Accumulate per output channel
+
+                    # 7b) Accumulate into M for each output channel
+                    #     by element-wise multiplying with the pre‐transformed kernel V[co,ci]
                     for co in range(C_out):
                         M[co] += U * V[co, ci]
-                # Inverse transform: for each output channel
-                for co in range(C_out):
-                    Y = A.T @ M[co] @ A
-                    out_tiles[n, co, th*tile_h:th*tile_h+tile_h, tw*tile_w:tw*tile_w+tile_w] = Y
+                        # Note “U * V[co,ci]” is elementwise multiply (4×4),
+                        # then we sum over input channels ci into M[co].
 
-    # Crop to H_out x W_out
+                # 8) Now do the inverse Winograd transform to get a 2×2 sub‐output for each co:
+                for co in range(C_out):
+                    # Y = A^T @ M[co] @ A  gives a 2×2 result.
+                    Y = A.T @ M[co] @ A   # shape (2,2)
+                    # Place Y into the correct location in out_tiles:
+                    out_tiles[n, co,
+                              th*tile_h : th*tile_h + tile_h,
+                              tw*tile_w : tw*tile_w + tile_w] = Y
+
+    # 9) Finally, we may have “over‐tiled” (padding), so crop to (H_out, W_out):
     return out_tiles[:, :, :H_out, :W_out]
